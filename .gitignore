@@ -8,6 +8,7 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+supabase.js
 
 # Native
 .kotlin/
@@ -41,7 +42,4 @@ app-example
 # generated native folders
 /ios
 /android
-
-
-# DataBase
-supabase.js
+ 
