@@ -6,34 +6,29 @@ import { Surface } from 'react-native-paper';
 /**
  * Tarjeta de alumno con toggle presente/ausente y campo de observación.
  * Props:
- *   alumno      → objeto { id, nombre, curso, ruta }
- *   estado      → { presente: bool, observacion: string }
- *   onChange    → fn({ presente, observacion }) llamada al cambiar cualquier valor
+ *   alumno   → { id, nombre, curso, vigente: bool }
+ *   estado   → { presente: bool|null, observacion: string }
+ *   onChange → fn({ presente, observacion })
  */
 export default function AlumnoItem({ alumno, estado, onChange }) {
   const [showObs, setShowObs] = useState(false);
 
-  const togglePresente = (valor) => {
-    onChange({ ...estado, presente: valor });
-  };
-
-  const handleObsChange = (texto) => {
-    onChange({ ...estado, observacion: texto });
-  };
+  const togglePresente = (valor) => onChange({ ...estado, presente: valor });
+  const handleObsChange = (texto) => onChange({ ...estado, observacion: texto });
 
   const esPresente = estado.presente === true;
-  const esAusente = estado.presente === false;
+  const esAusente  = estado.presente === false;
 
   return (
     <Surface style={styles.card} elevation={2}>
-      {/* Encabezado: nombre + ruta */}
+      {/* Encabezado: nombre + curso */}
       <View style={styles.header}>
         <View style={styles.info}>
           <Text style={styles.nombre}>{alumno.nombre}</Text>
-          <Text style={styles.sub}>{alumno.curso} · Ruta {alumno.ruta}</Text>
+          <Text style={styles.sub}>{alumno.curso}</Text>
         </View>
-        <View style={styles.rutaBadge}>
-          <Text style={styles.rutaText}>{alumno.ruta}</Text>
+        <View style={styles.cursoBadge}>
+          <Text style={styles.cursoText}>{alumno.curso}</Text>
         </View>
       </View>
 
@@ -112,16 +107,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  rutaBadge: {
+  cursoBadge: {
     backgroundColor: '#2a2a3e',
     borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  rutaText: {
+  cursoText: {
     color: '#a78bfa',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
   },
   toggleRow: {
     flexDirection: 'row',

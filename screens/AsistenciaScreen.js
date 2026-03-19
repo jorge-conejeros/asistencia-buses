@@ -1,379 +1,328 @@
-// screens/AsistenciaScreen.js
-import { useCallback, useEffect, useState } from 'react';
+// screens/LoginScreen.js
+import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator, Image,
+  KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet,
+  Text, TextInput, TouchableOpacity,
+  View,
 } from 'react-native';
-import { Appbar, Searchbar } from 'react-native-paper';
-import AlumnoItem from '../components/AlumnoItem';
 import { supabase } from '../supabase';
+import { colors, radius, spacing, typography } from '../theme';
+
+// Logo institucional — ruta fija, Metro la resuelve en tiempo de compilación
+const LOGO = require('../assets/images/logoelvergel.png');
 
 /**
- * Pantalla principal de registro de asistencia.
- * - Carga alumnos desde Supabase
- * - Permite filtrar por ruta y buscar por nombre
- * - Maneja estado local de asistencia
- * - Guarda en tabla `asistencia` al presionar "Guardar"
+ * Pantalla de login.
+ * Logo: coloca tu archivo en /assets/logo.png y descomenta la línea de Image.
+ * Con navegación condicional en App.js no se necesita navegar manualmente
+ * tras el login — React Navigation lo hace automático al detectar la sesión.
  */
-export default function AsistenciaScreen({ navigation }) {
-  const [alumnos, setAlumnos] = useState([]);
-  const [estados, setEstados] = useState({});       // { [alumno_id]: { presente, observacion } }
-  const [rutaFiltro, setRutaFiltro] = useState('Todas');
-  const [rutas, setRutas] = useState(['Todas']);
-  const [busqueda, setBusqueda] = useState('');
-  const [cargando, setCargando] = useState(true);
-  const [guardando, setGuardando] = useState(false);
-  const [usuario, setUsuario] = useState(null);
+/**
+ * Muestra el logo institucional.
+ * Si el archivo no carga, muestra un fallback con emoji y mensaje de error
+ * en desarrollo para que sea fácil de detectar.
+ */
+function LogoInstitucional() {
+  const [imgError, setImgError] = useState(false);
 
-  // ── Cargar usuario y alumnos al montar ──────────────────────────────────
-  useEffect(() => {
-    obtenerUsuario();
-    cargarAlumnos();
-  }, []);
+  if (imgError) {
+    return (
+      <View style={s.logoError}>
+        <Text style={s.logoErrorEmoji}>🏫</Text>
+        <Text style={s.logoErrorTexto}>Logo no encontrado{''}assets/images/logoelvergel.png</Text>
+      </View>
+    );
+  }
 
-  const obtenerUsuario = async () => {
-    const { data } = await supabase.auth.getUser();
-    setUsuario(data?.user ?? null);
-  };
+  return (
+    <Image
+      source={LOGO}
+      style={s.logo}
+      resizeMode="contain"
+      onError={() => setImgError(true)}
+    />
+  );
+}
 
-  const cargarAlumnos = async () => {
+export default function LoginScreen() {
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [error, setError]       = useState('');
+
+  const handleLogin = async () => {
+    setError('');
+
+    if (!email.trim())    { setError('Ingresa tu usuario o correo.'); return; }
+    if (!password.trim()) { setError('Ingresa tu contraseña.'); return; }
+
     setCargando(true);
-    const { data, error } = await supabase
-      .from('alumnos')
-      .select('id, nombre, curso, ruta')
-      .order('ruta')
-      .order('nombre');
 
-    if (error) {
-      Alert.alert('Error', 'No se pudieron cargar los alumnos.');
-      setCargando(false);
-      return;
+    // Paso 1: buscar perfil por nombre_usuario (login con alias)
+    // Si no encuentra, intentar login directo con email
+    let emailFinal = email.trim().toLowerCase();
+
+    const { data: perfilData } = await supabase
+      .from('perfiles')
+      .select('id, email, nombre_usuario, vigente')
+      .eq('nombre_usuario', email.trim())
+      .maybeSingle();
+
+    if (perfilData) {
+      // Encontró perfil por nombre_usuario
+      if (!perfilData.vigente) {
+        setCargando(false);
+        setError('Usuario inhabilitado para ingresar al sistema.');
+        return;
+      }
+      emailFinal = perfilData.email;
     }
 
-    setAlumnos(data);
-    inicializarEstados(data);
-    extraerRutas(data);
+    // Paso 2: autenticar con Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email:    emailFinal,
+      password: password.trim(),
+    });
     setCargando(false);
-  };
 
-  const inicializarEstados = (lista) => {
-    const inicial = {};
-    lista.forEach((a) => {
-      inicial[a.id] = { presente: null, observacion: '' };
-    });
-    setEstados(inicial);
-  };
-
-  const extraerRutas = (lista) => {
-    const unicas = ['Todas', ...new Set(lista.map((a) => a.ruta))];
-    setRutas(unicas);
-  };
-
-  // ── Cambio de estado individual ─────────────────────────────────────────
-  const handleCambio = useCallback((alumnoId, nuevoEstado) => {
-    setEstados((prev) => ({ ...prev, [alumnoId]: nuevoEstado }));
-  }, []);
-
-  // ── Marcar todos ─────────────────────────────────────────────────────────
-  const marcarTodos = (valor) => {
-    setEstados((prev) => {
-      const nuevo = { ...prev };
-      alumnosFiltrados().forEach((a) => {
-        nuevo[a.id] = { ...nuevo[a.id], presente: valor };
-      });
-      return nuevo;
-    });
-  };
-
-  // ── Filtrar alumnos ───────────────────────────────────────────────────────
-  const alumnosFiltrados = useCallback(() => {
-    return alumnos.filter((a) => {
-      const porRuta = rutaFiltro === 'Todas' || a.ruta === rutaFiltro;
-      const porNombre = a.nombre.toLowerCase().includes(busqueda.toLowerCase());
-      return porRuta && porNombre;
-    });
-  }, [alumnos, rutaFiltro, busqueda]);
-
-  // ── Resumen estadísticas ─────────────────────────────────────────────────
-  const estadisticas = () => {
-    const lista = alumnosFiltrados();
-    const presentes = lista.filter((a) => estados[a.id]?.presente === true).length;
-    const ausentes = lista.filter((a) => estados[a.id]?.presente === false).length;
-    const sinMarcar = lista.filter((a) => estados[a.id]?.presente === null).length;
-    return { presentes, ausentes, sinMarcar, total: lista.length };
-  };
-
-  // ── Guardar en Supabase ───────────────────────────────────────────────────
-  const guardarAsistencia = async () => {
-    if (!usuario) return Alert.alert('Error', 'No se encontró el usuario.');
-
-    const lista = alumnosFiltrados();
-    const sinMarcar = lista.filter((a) => estados[a.id]?.presente === null);
-
-    if (sinMarcar.length > 0) {
-      Alert.alert(
-        'Alumnos sin marcar',
-        `Hay ${sinMarcar.length} alumno(s) sin registrar. ¿Deseas guardar de todas formas?`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Guardar igual', onPress: () => ejecutarGuardado(lista) },
-        ]
-      );
+    if (authError) {
+      setError('Usuario o contraseña incorrectos. Intenta de nuevo.');
       return;
     }
 
-    ejecutarGuardado(lista);
-  };
+    // Paso 3: si logró autenticar pero no buscamos perfil antes, verificar vigencia ahora
+    if (!perfilData && authData?.user) {
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('vigente')
+        .eq('id', authData.user.id)
+        .maybeSingle();
 
-  const ejecutarGuardado = async (lista) => {
-    setGuardando(true);
-
-    const registros = lista
-      .filter((a) => estados[a.id]?.presente !== null)
-      .map((a) => ({
-        alumno_id: a.id,
-        docente_id: usuario.id,
-        presente: estados[a.id].presente,
-        observacion: estados[a.id].observacion || null,
-      }));
-
-    const { error } = await supabase.from('asistencia').insert(registros);
-
-    setGuardando(false);
-
-    if (error) {
-      Alert.alert('Error al guardar', error.message);
-    } else {
-      Alert.alert('✓ Guardado', `Se registraron ${registros.length} alumnos correctamente.`);
+      if (perfil && !perfil.vigente) {
+        // Forzar cierre de sesión inmediato
+        await supabase.auth.signOut();
+        setError('Usuario inhabilitado para ingresar al sistema.');
+        return;
+      }
     }
+    // App.js detecta la sesión y navega automáticamente
   };
-
-  // ── Cerrar sesión ─────────────────────────────────────────────────────────
-  const cerrarSesion = async () => {
-    await supabase.auth.signOut();
-    navigation.replace('Login');
-  };
-
-  // ── Render ────────────────────────────────────────────────────────────────
-  const stats = estadisticas();
 
   return (
-    <View style={styles.container}>
-      {/* Barra superior */}
-      <Appbar.Header style={styles.appbar}>
-        <Appbar.Content
-          title="Registro de asistencia"
-          titleStyle={styles.appbarTitle}
-          subtitle={new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
-        />
-        <Appbar.Action icon="history" onPress={() => navigation.navigate('Historial')} color="#a78bfa" />
-        <Appbar.Action icon="logout" onPress={cerrarSesion} color="#a78bfa" />
-      </Appbar.Header>
+    <KeyboardAvoidingView
+      style={s.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Cabecera con logo ── */}
+        <View style={s.header}>
+          <LogoInstitucional />
+          <Text style={s.titulo}>Sistema de Asistencia</Text>
+          <Text style={s.subtitulo}>Buses de Acercamiento Escolar</Text>
+        </View>
 
-      {/* Buscador */}
-      <Searchbar
-        placeholder="Buscar alumno..."
-        value={busqueda}
-        onChangeText={setBusqueda}
-        style={styles.searchbar}
-        inputStyle={{ color: '#f0f0f5' }}
-        iconColor="#a78bfa"
-        placeholderTextColor="#666"
-      />
+        {/* ── Formulario ── */}
+        <View style={s.card}>
+          <Text style={s.cardTitulo}>Iniciar sesión</Text>
+          <Text style={s.cardSubtitulo}>Ingresa con tu usuario o correo institucional</Text>
 
-      {/* Filtro de rutas */}
-      <View style={styles.rutasRow}>
-        {rutas.map((r) => (
+          {/* Correo */}
+          <Text style={s.label}>Correo electrónico</Text>
+          <TextInput
+            style={[s.input, error && s.inputError]}
+            value={email}
+            onChangeText={(t) => { setEmail(t); setError(''); }}
+            placeholder="usuario o correo@institucion.cl"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="default"
+            autoCapitalize="none"  // nombre_usuario es case-sensitive
+            autoCorrect={false}
+          />
+
+          {/* Contraseña */}
+          <Text style={s.label}>Contraseña</Text>
+          <TextInput
+            style={[s.input, error && s.inputError]}
+            value={password}
+            onChangeText={(t) => { setPassword(t); setError(''); }}
+            placeholder="••••••••"
+            placeholderTextColor={colors.textMuted}
+            secureTextEntry
+          />
+
+          {/* Error */}
+          {error ? (
+            <View style={s.errorBox}>
+              <Text style={s.errorText}>⚠ {error}</Text>
+            </View>
+          ) : null}
+
+          {/* Botón */}
           <TouchableOpacity
-            key={r}
-            style={[styles.rutaChip, rutaFiltro === r && styles.rutaChipActive]}
-            onPress={() => setRutaFiltro(r)}
+            style={[s.btnLogin, cargando && s.btnLoginDisabled]}
+            onPress={handleLogin}
+            disabled={cargando}
+            activeOpacity={0.85}
           >
-            <Text style={[styles.rutaChipText, rutaFiltro === r && styles.rutaChipTextActive]}>
-              {r}
-            </Text>
+            {cargando
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={s.btnLoginText}>Ingresar</Text>
+            }
           </TouchableOpacity>
-        ))}
-      </View>
+        </View>
 
-      {/* Estadísticas */}
-      <View style={styles.statsRow}>
-        <StatBox label="Total" value={stats.total} color="#a78bfa" />
-        <StatBox label="Presentes" value={stats.presentes} color="#22c55e" />
-        <StatBox label="Ausentes" value={stats.ausentes} color="#ef4444" />
-        <StatBox label="Sin marcar" value={stats.sinMarcar} color="#f59e0b" />
-      </View>
-
-      {/* Lista de alumnos */}
-      {cargando ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color="#a78bfa" size="large" />
-      ) : (
-        <FlatList
-          data={alumnosFiltrados()}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={({ item }) => (
-            <AlumnoItem
-              alumno={item}
-              estado={estados[item.id] ?? { presente: null, observacion: '' }}
-              onChange={(nuevoEstado) => handleCambio(item.id, nuevoEstado)}
-            />
-          )}
-          contentContainerStyle={{ paddingBottom: 120 }}
-          ListEmptyComponent={
-            <Text style={styles.vacio}>No se encontraron alumnos.</Text>
-          }
-        />
-      )}
-
-      {/* Barra inferior de acciones */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.btnSecundario} onPress={() => marcarTodos(true)}>
-          <Text style={styles.btnSecundarioText}>✓ Todos presentes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btnSecundario} onPress={() => marcarTodos(false)}>
-          <Text style={[styles.btnSecundarioText, { color: '#ef4444' }]}>✗ Todos ausentes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.btnGuardar, guardando && { opacity: 0.6 }]}
-          onPress={guardarAsistencia}
-          disabled={guardando}
-        >
-          <Text style={styles.btnGuardarText}>
-            {guardando ? 'Guardando...' : '💾 Guardar'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+        {/* ── Pie ── */}
+        <Text style={s.pie}>Sistema de gestión de asistencia escolar</Text>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-// ── Sub-componente estadística ───────────────────────────────────────────────
-function StatBox({ label, value, color }) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
+const s = StyleSheet.create({
+  flex:   { flex: 1, backgroundColor: colors.bgBase },
+  scroll: {
+    flexGrow:        1,
+    justifyContent:  'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical:   spacing.xl * 2,
+  },
 
-// ── Estilos ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#12121e',
+  // Cabecera
+  header: {
+    alignItems:   'center',
+    marginBottom: spacing.xl + 4,
   },
-  appbar: {
-    backgroundColor: '#1a1a2e',
-    elevation: 0,
+  logo: {
+    width:        140,
+    height:       140,
+    marginBottom: spacing.lg,
   },
-  appbarTitle: {
-    color: '#f0f0f5',
-    fontWeight: '700',
-    fontSize: 16,
+  // Fallback cuando el logo falla al cargar
+  logoError: {
+    width:           140,
+    height:          140,
+    borderRadius:    radius.xl,
+    backgroundColor: colors.dangerLight,
+    borderWidth:     1,
+    borderColor:     colors.dangerBorder,
+    justifyContent:  'center',
+    alignItems:      'center',
+    marginBottom:    spacing.lg,
+    padding:         spacing.sm,
   },
-  searchbar: {
-    marginHorizontal: 12,
-    marginVertical: 8,
-    backgroundColor: '#1e1e2e',
-    borderRadius: 10,
+  logoErrorEmoji: { fontSize: 36, marginBottom: 4 },
+  logoErrorTexto: {
+    fontSize:   9,
+    color:      colors.danger,
+    textAlign:  'center',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  rutasRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    gap: 8,
-    marginBottom: 8,
-    flexWrap: 'wrap',
+  titulo: {
+    ...typography.titleLg,
+    fontSize:     22,
+    color:        colors.primary,
+    textAlign:    'center',
+    marginBottom: spacing.xs,
   },
-  rutaChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#1e1e2e',
-    borderWidth: 1,
-    borderColor: '#3a3a4e',
-  },
-  rutaChipActive: {
-    backgroundColor: '#4f46e5',
-    borderColor: '#6366f1',
-  },
-  rutaChipText: {
-    color: '#888',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  rutaChipTextActive: {
-    color: '#fff',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    marginHorizontal: 12,
-    marginBottom: 8,
-    gap: 8,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: '#1e1e2e',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  statLabel: {
-    color: '#666',
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  vacio: {
+  subtitulo: {
+    ...typography.caption,
     textAlign: 'center',
-    color: '#555',
-    marginTop: 60,
-    fontSize: 14,
+    color:     colors.textSecondary,
   },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    backgroundColor: '#1a1a2e',
-    padding: 12,
-    paddingBottom: 24,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#2a2a3e',
+
+  // Card del formulario
+  card: {
+    backgroundColor: colors.bgSurface,
+    borderRadius:    radius.xl,
+    padding:         spacing.xl,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 2 },
+    shadowOpacity:   0.07,
+    shadowRadius:    8,
+    elevation:       3,
   },
-  btnSecundario: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#2a2a3e',
-    alignItems: 'center',
+  cardTitulo: {
+    ...typography.titleLg,
+    marginBottom: spacing.xs,
   },
-  btnSecundarioText: {
-    color: '#22c55e',
-    fontSize: 12,
-    fontWeight: '600',
+  cardSubtitulo: {
+    ...typography.caption,
+    marginBottom: spacing.lg + 4,
   },
-  btnGuardar: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#4f46e5',
-    alignItems: 'center',
+
+  // Campos
+  label: {
+    fontSize:     12,
+    fontWeight:   '600',
+    color:        colors.textSecondary,
+    marginBottom: spacing.xs,
+    textTransform:'uppercase',
+    letterSpacing: 0.5,
   },
-  btnGuardarText: {
-    color: '#fff',
-    fontWeight: '700',
+  input: {
+    backgroundColor: colors.bgInput,
+    borderRadius:    radius.md,
+    borderWidth:     1.5,
+    borderColor:     colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.md - 1,
+    fontSize:        15,
+    color:           colors.textPrimary,
+    marginBottom:    spacing.md,
+  },
+  inputError: {
+    borderColor: colors.danger,
+  },
+
+  // Error
+  errorBox: {
+    backgroundColor: colors.dangerLight,
+    borderRadius:    radius.md,
+    borderWidth:     1,
+    borderColor:     colors.dangerBorder,
+    padding:         spacing.sm + 2,
+    marginBottom:    spacing.md,
+  },
+  errorText: {
+    color:    colors.danger,
     fontSize: 13,
+    fontWeight: '500',
+  },
+
+  // Botón
+  btnLogin: {
+    backgroundColor: colors.primary,
+    borderRadius:    radius.md,
+    paddingVertical: spacing.md,
+    alignItems:      'center',
+    marginTop:       spacing.xs,
+    shadowColor:     colors.primary,
+    shadowOffset:    { width: 0, height: 3 },
+    shadowOpacity:   0.25,
+    shadowRadius:    6,
+    elevation:       4,
+  },
+  btnLoginDisabled: { opacity: 0.65 },
+  btnLoginText: {
+    color:      '#fff',
+    fontWeight: '700',
+    fontSize:   15,
+    letterSpacing: 0.3,
+  },
+
+  // Pie
+  pie: {
+    ...typography.muted,
+    textAlign:  'center',
+    marginTop:  spacing.xl,
+    fontSize:   11,
   },
 });
