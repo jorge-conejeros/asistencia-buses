@@ -1,170 +1,84 @@
 // components/AlumnoItem.js
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Surface } from 'react-native-paper';
+import { Text, TextInput, TouchableOpacity, View } from 'react-native';
+import s from '../styles/alumnoItem';
 
 /**
- * Tarjeta de alumno con toggle presente/ausente y campo de observación.
+ * Fila compacta de alumno — todo en una sola línea horizontal:
+ * [Nombre + curso] [✓ Presente] [✗ Ausente] [💬]
+ *
  * Props:
- *   alumno   → { id, nombre, curso, vigente: bool }
+ *   alumno   → { id, nombre, curso }
  *   estado   → { presente: bool|null, observacion: string }
  *   onChange → fn({ presente, observacion })
  */
 export default function AlumnoItem({ alumno, estado, onChange }) {
   const [showObs, setShowObs] = useState(false);
 
-  const togglePresente = (valor) => onChange({ ...estado, presente: valor });
+  const togglePresente  = (valor) => onChange({ ...estado, presente: valor });
   const handleObsChange = (texto) => onChange({ ...estado, observacion: texto });
 
   const esPresente = estado.presente === true;
   const esAusente  = estado.presente === false;
+  const tieneObs   = !!estado.observacion;
 
   return (
-    <Surface style={styles.card} elevation={2}>
-      {/* Encabezado: nombre + curso */}
-      <View style={styles.header}>
-        <View style={styles.info}>
-          <Text style={styles.nombre}>{alumno.nombre}</Text>
-          <Text style={styles.sub}>{alumno.curso}</Text>
-        </View>
-        <View style={styles.cursoBadge}>
-          <Text style={styles.cursoText}>{alumno.curso}</Text>
-        </View>
+    <View style={[s.fila, esPresente && s.filaPresente, esAusente && s.filaAusente]}>
+      {/* Indicador lateral de color */}
+      <View style={[s.indicador, esPresente && s.indPresente, esAusente && s.indAusente]} />
+
+      {/* Nombre y curso */}
+      <View style={s.info}>
+        <Text style={s.nombre} numberOfLines={1}>{alumno.nombre}</Text>
+        <Text style={s.curso}>{alumno.curso}</Text>
       </View>
 
-      {/* Botones presente / ausente */}
-      <View style={styles.toggleRow}>
+      {/* Botones compactos */}
+      <View style={s.acciones}>
         <TouchableOpacity
-          style={[styles.btn, esPresente && styles.btnPresenteActive]}
+          style={[s.btn, esPresente && s.btnPresente]}
           onPress={() => togglePresente(true)}
-          activeOpacity={0.8}
+          activeOpacity={0.75}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
         >
-          <Text style={[styles.btnText, esPresente && styles.btnTextActive]}>
-            ✓ Presente
-          </Text>
+          <Text style={[s.btnText, esPresente && s.btnTextPresente]}>✓</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.btn, esAusente && styles.btnAusenteActive]}
+          style={[s.btn, esAusente && s.btnAusente]}
           onPress={() => togglePresente(false)}
-          activeOpacity={0.8}
+          activeOpacity={0.75}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
         >
-          <Text style={[styles.btnText, esAusente && styles.btnTextActive]}>
-            ✗ Ausente
+          <Text style={[s.btnText, esAusente && s.btnTextAusente]}>✗</Text>
+        </TouchableOpacity>
+
+        {/* Ícono de observación */}
+        <TouchableOpacity
+          style={[s.btnObs, tieneObs && s.btnObsActiva]}
+          onPress={() => setShowObs(!showObs)}
+          activeOpacity={0.75}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+        >
+          <Text style={[s.btnObsText, tieneObs && s.btnObsTextActiva]}>
+            {tieneObs ? '💬' : '○'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Observación */}
-      <TouchableOpacity
-        onPress={() => setShowObs(!showObs)}
-        style={styles.obsToggle}
-      >
-        <Text style={styles.obsToggleText}>
-          {showObs ? '▲ Ocultar observación' : '▼ Agregar observación'}
-          {estado.observacion ? ' ●' : ''}
-        </Text>
-      </TouchableOpacity>
-
+      {/* Campo de observación expandible (debajo de la fila) */}
       {showObs && (
         <TextInput
-          style={styles.obsInput}
-          placeholder="Escribe una observación..."
-          placeholderTextColor="#888"
+          style={s.obsInput}
+          placeholder="Observación..."
+          placeholderTextColor="#A0A6B8"
           value={estado.observacion}
           onChangeText={handleObsChange}
           multiline
-          numberOfLines={2}
           maxLength={200}
+          autoFocus
         />
       )}
-    </Surface>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderRadius: 12,
-    padding: 14,
-    marginVertical: 6,
-    marginHorizontal: 12,
-    backgroundColor: '#1e1e2e',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  info: { flex: 1 },
-  nombre: {
-    color: '#f0f0f5',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  sub: {
-    color: '#888',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  cursoBadge: {
-    backgroundColor: '#2a2a3e',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  cursoText: {
-    color: '#a78bfa',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  btn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#3a3a4e',
-    alignItems: 'center',
-    backgroundColor: '#2a2a3e',
-  },
-  btnPresenteActive: {
-    backgroundColor: '#166534',
-    borderColor: '#22c55e',
-  },
-  btnAusenteActive: {
-    backgroundColor: '#7f1d1d',
-    borderColor: '#ef4444',
-  },
-  btnText: {
-    color: '#888',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  btnTextActive: {
-    color: '#fff',
-  },
-  obsToggle: {
-    paddingVertical: 4,
-  },
-  obsToggleText: {
-    color: '#6366f1',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  obsInput: {
-    marginTop: 6,
-    backgroundColor: '#2a2a3e',
-    borderRadius: 8,
-    padding: 10,
-    color: '#f0f0f5',
-    fontSize: 13,
-    borderWidth: 1,
-    borderColor: '#3a3a4e',
-    textAlignVertical: 'top',
-  },
-});

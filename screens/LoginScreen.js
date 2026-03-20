@@ -55,20 +55,48 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     setError('');
 
-    if (!email.trim())    { setError('Ingresa tu correo electrónico.'); return; }
+    if (!email.trim())    { setError('Ingresa tu usuario o correo.'); return; }
     if (!password.trim()) { setError('Ingresa tu contraseña.'); return; }
 
     setCargando(true);
+
+    // Paso 1: intentar resolver nombre_usuario → email
+    // La política anon de perfiles permite esta consulta sin sesión activa
+    let emailFinal = email.trim().toLowerCase();
+    const input    = email.trim();
+
+    // Si el input no tiene @, asumimos que es nombre_usuario
+    if (!input.includes('@')) {
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('email, vigente')
+        .eq('nombre_usuario', input)
+        .maybeSingle();
+
+      if (!perfil) {
+        setCargando(false);
+        setError('Usuario no encontrado. Verifica tu nombre de usuario.');
+        return;
+      }
+      if (perfil.vigente === false) {
+        setCargando(false);
+        setError('Usuario inhabilitado para ingresar al sistema.');
+        return;
+      }
+      emailFinal = perfil.email;
+    }
+
+    // Paso 2: autenticar con el email resuelto
     const { error: authError } = await supabase.auth.signInWithPassword({
-      email:    email.trim().toLowerCase(),
+      email:    emailFinal,
       password: password.trim(),
     });
-    setCargando(false);
 
+    // Si hay error, mostrar mensaje. Si no, App.js navega automáticamente.
     if (authError) {
-      setError('Correo o contraseña incorrectos. Intenta de nuevo.');
+      setCargando(false);
+      setError('Contraseña incorrecta. Intenta de nuevo.');
     }
-    // Si no hay error, App.js detecta la sesión y navega automáticamente
   };
 
   return (
@@ -91,7 +119,7 @@ export default function LoginScreen() {
         {/* ── Formulario ── */}
         <View style={s.card}>
           <Text style={s.cardTitulo}>Iniciar sesión</Text>
-          <Text style={s.cardSubtitulo}>Ingresa con tu cuenta institucional</Text>
+          <Text style={s.cardSubtitulo}>Ingresa con tu usuario o correo institucional</Text>
 
           {/* Correo */}
           <Text style={s.label}>Correo electrónico</Text>
@@ -99,10 +127,10 @@ export default function LoginScreen() {
             style={[s.input, error && s.inputError]}
             value={email}
             onChangeText={(t) => { setEmail(t); setError(''); }}
-            placeholder="correo@institucion.cl"
+            placeholder="usuario o correo"
             placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
+            keyboardType="default"
+            autoCapitalize="none"  // nombre_usuario es case-sensitive
             autoCorrect={false}
           />
 

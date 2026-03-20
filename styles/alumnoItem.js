@@ -1,81 +1,109 @@
 // styles/alumnoItem.js
 import { StyleSheet } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, radius, spacing } from '../theme';
 
 export default StyleSheet.create({
-  card: {
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginVertical: 5,
+  // ── Fila principal ────────────────────────────────────────────
+  fila: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    backgroundColor:  colors.bgSurface,
     marginHorizontal: spacing.md,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    // sombra iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    // sombra Android
-    elevation: 2,
+    marginVertical:   3,
+    borderRadius:     radius.md,
+    borderWidth:      1,
+    borderColor:      colors.border,
+    overflow:         'hidden',      // para que el indicador lateral no salga del borde
+    flexWrap:         'wrap',        // permite que obsInput baje a la siguiente línea
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.sm + 2,
-  },
-  info:   { flex: 1 },
-  nombre: { ...typography.titleMd },
-  sub:    { ...typography.caption, marginTop: 2 },
+  // Tinte sutil cuando está marcado
+  filaPresente: { borderColor: colors.successBorder, backgroundColor: '#FAFFFE' },
+  filaAusente:  { borderColor: colors.dangerBorder,  backgroundColor: '#FFFAFA' },
 
-  // Botones presente / ausente
-  toggleRow: {
+  // ── Indicador lateral de color ────────────────────────────────
+  indicador: {
+    width:          4,
+    alignSelf:      'stretch',
+    backgroundColor: colors.border,
+  },
+  indPresente: { backgroundColor: colors.success },
+  indAusente:  { backgroundColor: colors.danger  },
+
+  // ── Info: nombre + curso ──────────────────────────────────────
+  info: {
+    flex:             1,
+    paddingVertical:  spacing.sm + 1,
+    paddingLeft:      spacing.sm + 2,
+    paddingRight:     spacing.xs,
+  },
+  nombre: {
+    fontSize:   13,
+    fontWeight: '600',
+    color:      colors.textPrimary,
+    lineHeight: 17,
+  },
+  curso: {
+    fontSize: 10,
+    color:    colors.textMuted,
+    marginTop: 1,
+  },
+
+  // ── Botones de acción ─────────────────────────────────────────
+  acciones: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    alignItems:    'center',
+    paddingRight:  spacing.sm,
+    gap:           spacing.xs,
   },
   btn: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    backgroundColor: colors.bgInput,
+    width:           38,
+    height:          30,
+    borderRadius:    radius.sm,
+    borderWidth:     1,
+    borderColor:     colors.border,
+    backgroundColor: colors.bgBase,
+    justifyContent:  'center',
+    alignItems:      'center',
   },
-  btnPresenteActive: {
+  btnPresente: {
     backgroundColor: colors.successLight,
     borderColor:     colors.success,
   },
-  btnAusenteActive: {
+  btnAusente: {
     backgroundColor: colors.dangerLight,
     borderColor:     colors.danger,
   },
   btnText: {
-    color:      colors.textSecondary,
-    fontWeight: '600',
-    fontSize:   13,
+    fontSize:   14,
+    fontWeight: '700',
+    color:      colors.textMuted,
   },
-  btnTextPresenteActive: { color: colors.success },
-  btnTextAusenteActive:  { color: colors.danger },
+  btnTextPresente: { color: colors.success },
+  btnTextAusente:  { color: colors.danger  },
 
-  // Observación
-  obsToggle:     { paddingVertical: 4 },
-  obsToggleText: {
-    color:      colors.primary,
-    fontSize:   12,
-    fontWeight: '500',
+  // ── Botón observación ─────────────────────────────────────────
+  btnObs: {
+    width:           28,
+    height:          30,
+    borderRadius:    radius.sm,
+    justifyContent:  'center',
+    alignItems:      'center',
   },
+  btnObsActiva:     {},
+  btnObsText:       { fontSize: 13, color: colors.textMuted },
+  btnObsTextActiva: { fontSize: 13 },
+
+  // ── Campo observación (se expande debajo de la fila) ──────────
   obsInput: {
-    marginTop:        spacing.sm,
-    backgroundColor:  colors.bgInput,
-    borderRadius:     radius.md,
-    padding:          spacing.sm + 2,
-    color:            colors.textPrimary,
-    fontSize:         13,
-    borderWidth:      1,
-    borderColor:      colors.border,
-    textAlignVertical:'top',
+    width:             '100%',
+    paddingHorizontal: spacing.md,
+    paddingVertical:   spacing.sm,
+    borderTopWidth:    1,
+    borderTopColor:    colors.border,
+    backgroundColor:   colors.bgInput,
+    color:             colors.textPrimary,
+    fontSize:          12,
+    minHeight:         40,
+    textAlignVertical: 'top',
   },
 });

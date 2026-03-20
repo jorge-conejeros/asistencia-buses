@@ -9,6 +9,7 @@ import AlumnosScreen from './screens/AlumnosScreen';
 import AsistenciaScreen from './screens/AsistenciaScreen';
 import HistorialScreen from './screens/HistorialScreen';
 import LoginScreen from './screens/LoginScreen';
+import PerfilScreen from './screens/PerfilScreen';
 import { supabase } from './supabase';
 import { colors, paperTheme } from './theme';
 
@@ -46,6 +47,7 @@ export default function App() {
               <Stack.Screen name="Asistencia" component={AsistenciaScreen} />
               <Stack.Screen name="Historial"  component={HistorialScreen} />
               <Stack.Screen name="Alumnos"    component={AlumnosScreen} />
+              <Stack.Screen name="Perfil"     component={PerfilScreen} />
             </>
           ) : (
             <Stack.Screen name="Login" component={LoginScreen} />
