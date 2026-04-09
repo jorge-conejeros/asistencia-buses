@@ -148,4 +148,27 @@ export default StyleSheet.create({
     alignItems:      'center',
   },
   btnGuardarModalText: { color: colors.primaryText, fontWeight: '700', fontSize: 14 },
+
+  // Vista previa nombre completo en modal
+  previewNombre: {
+    backgroundColor: '#F0F4FF',
+    borderRadius:    8,
+    padding:         10,
+    marginBottom:    16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#5B50C8',
+  },
+  previewLabel: {
+    fontSize:   10,
+    fontWeight: '600',
+    color:      '#5B50C8',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  previewTexto: {
+    fontSize:   14,
+    fontWeight: '700',
+    color:      '#1A1A2E',
+  },
 });

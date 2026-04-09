@@ -19,61 +19,81 @@ import { colors } from '../theme';
 
 const CURSOS = ['1° Medio', '2° Medio', '3° Medio', '4° Medio'];
 
+// Orden lógico de cursos para mostrar agrupados
+const ORDEN_CURSOS = ['1° Medio', '2° Medio', '3° Medio', '4° Medio'];
+
 export default function AlumnosScreen({ navigation }) {
   const [alumnos, setAlumnos]           = useState([]);
   const [busqueda, setBusqueda]         = useState('');
   const [cargando, setCargando]         = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [alumnoEditar, setAlumnoEditar] = useState(null);
-  const [formNombre, setFormNombre]     = useState('');
-  const [formCurso, setFormCurso]       = useState('');
   const [guardando, setGuardando]       = useState(false);
   const [mostrarInactivos, setMostrarInactivos] = useState(false);
 
+  // Campos del formulario separados
+  const [formNombres, setFormNombres]           = useState('');
+  const [formApellidoPat, setFormApellidoPat]   = useState('');
+  const [formApellidoMat, setFormApellidoMat]   = useState('');
+  const [formCurso, setFormCurso]               = useState('');
+
   useEffect(() => { cargarAlumnos(); }, []);
 
-  // ── Carga ──────────────────────────────────────────────────────
+  // ── Carga — ordenado por curso → apellido_paterno → nombres ───
   const cargarAlumnos = async () => {
     setCargando(true);
     const { data, error } = await supabase
       .from('alumnos')
-      .select('id, nombre, curso, vigente')
+      .select('id, nombres, apellido_paterno, apellido_materno, nombre_completo, curso, vigente')
       .order('vigente', { ascending: false })
       .order('curso')
-      .order('nombre');
+      .order('apellido_paterno')
+      .order('nombres');
+
     if (error) { Alert.alert('Error', 'No se pudieron cargar los alumnos.'); }
     else       { setAlumnos(data); }
     setCargando(false);
   };
 
-  // ── Filtro ─────────────────────────────────────────────────────
+  // ── Filtro — busca en apellidos y nombres ─────────────────────
   const alumnosFiltrados = useCallback((soloVigentes) => {
+    const q = busqueda.toLowerCase();
     return alumnos.filter((a) => {
       const porVigencia = soloVigentes ? a.vigente === true : a.vigente === false;
-      const porNombre   = a.nombre.toLowerCase().includes(busqueda.toLowerCase());
+      const porNombre   = !q
+        || a.apellido_paterno?.toLowerCase().includes(q)
+        || a.apellido_materno?.toLowerCase().includes(q)
+        || a.nombres?.toLowerCase().includes(q);
       return porVigencia && porNombre;
     });
   }, [alumnos, busqueda]);
 
+  // ── Nombre para mostrar en UI ─────────────────────────────────
+  const nombreMostrar = (a) =>
+    a.nombre_completo
+    ?? `${a.apellido_paterno?.toUpperCase() ?? ''} ${a.apellido_materno?.toUpperCase() ?? ''}, ${a.nombres ?? ''}`.trim();
+
   // ── Modal edición ──────────────────────────────────────────────
   const abrirEditar = (alumno) => {
     setAlumnoEditar(alumno);
-    setFormNombre(alumno.nombre);
-    setFormCurso(alumno.curso);
+    setFormNombres(alumno.nombres ?? '');
+    setFormApellidoPat(alumno.apellido_paterno ?? '');
+    setFormApellidoMat(alumno.apellido_materno ?? '');
+    setFormCurso(alumno.curso ?? '');
     setModalVisible(true);
   };
   const cerrarModal = () => { setModalVisible(false); setAlumnoEditar(null); };
 
-  // ── Obtener userId ─────────────────────────────────────────────
   const obtenerUserId = async () => {
     const { data } = await supabase.auth.getUser();
     return data?.user?.id ?? null;
   };
 
-  // ── Guardar nombre + curso ─────────────────────────────────────
+  // ── Guardar cambios ────────────────────────────────────────────
   const guardarCambios = async () => {
-    if (!formNombre.trim()) { Alert.alert('Campo requerido', 'El nombre no puede estar vacío.'); return; }
-    if (!formCurso)         { Alert.alert('Campo requerido', 'Debes seleccionar un curso.'); return; }
+    if (!formNombres.trim())     { Alert.alert('Campo requerido', 'Ingresa el o los nombres.'); return; }
+    if (!formApellidoPat.trim()) { Alert.alert('Campo requerido', 'Ingresa el apellido paterno.'); return; }
+    if (!formCurso)              { Alert.alert('Campo requerido', 'Selecciona un curso.'); return; }
 
     setGuardando(true);
     const userId = await obtenerUserId();
@@ -81,7 +101,11 @@ export default function AlumnosScreen({ navigation }) {
     const { error } = await supabase
       .from('alumnos')
       .update({
-        nombre:      formNombre.trim(),
+        nombres:          formNombres.trim(),
+        apellido_paterno: formApellidoPat.trim(),
+        apellido_materno: formApellidoMat.trim() || null,
+        // Mantener columna nombre sincronizada
+        nombre: `${formNombres.trim()} ${formApellidoPat.trim()}${formApellidoMat.trim() ? ' ' + formApellidoMat.trim() : ''}`,
         curso:       formCurso,
         editado_por: userId,
         editado_en:  new Date().toISOString(),
@@ -94,59 +118,55 @@ export default function AlumnosScreen({ navigation }) {
       Alert.alert('Error', 'No se pudo guardar. Intenta de nuevo.');
     } else {
       setAlumnos((prev) =>
-        prev.map((a) =>
-          a.id === alumnoEditar.id ? { ...a, nombre: formNombre.trim(), curso: formCurso } : a
-        )
+        prev.map((a) => a.id === alumnoEditar.id ? {
+          ...a,
+          nombres:          formNombres.trim(),
+          apellido_paterno: formApellidoPat.trim(),
+          apellido_materno: formApellidoMat.trim() || null,
+          curso:            formCurso,
+        } : a)
       );
       cerrarModal();
     }
   };
 
-  // ── Cambiar vigencia ───────────────────────────────────────────
+  // ── Vigencia ───────────────────────────────────────────────────
   const cambiarVigencia = (alumno) => {
-    const esBaja    = alumno.vigente;
-    const titulo    = esBaja ? 'Volver inactivo' : '¿Reactivar alumno?';
-    const mensaje   = esBaja
-      ? `¿Estás seguro de que deseas marcar como inactivo a ${alumno.nombre}?\n\nYa no aparecerá en el registro de asistencia diario.`
-      : `¿Deseas reactivar a ${alumno.nombre}?\n\nVolverá a aparecer en el registro de asistencia.`;
-
-    Alert.alert(titulo, mensaje, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text:  esBaja ? 'Sí, volver inactivo' : 'Sí, reactivar',
-        style: esBaja ? 'destructive' : 'default',
-        onPress: () => ejecutarCambioVigencia(alumno),
-      },
-    ]);
+    const esBaja  = alumno.vigente;
+    const display = nombreMostrar(alumno);
+    Alert.alert(
+      esBaja ? 'Volver inactivo' : '¿Reactivar alumno?',
+      esBaja
+        ? `¿Marcar como inactivo a ${display}?\n\nYa no aparecerá en el registro de asistencia.`
+        : `¿Reactivar a ${display}?\n\nVolverá a aparecer en el registro de asistencia.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: esBaja ? 'Sí, volver inactivo' : 'Sí, reactivar',
+          style: esBaja ? 'destructive' : 'default',
+          onPress: () => ejecutarCambioVigencia(alumno) },
+      ]
+    );
   };
 
   const ejecutarCambioVigencia = async (alumno) => {
     const userId = await obtenerUserId();
     const { error } = await supabase
       .from('alumnos')
-      .update({
-        vigente:     !alumno.vigente,
-        editado_por: userId,
-        editado_en:  new Date().toISOString(),
-      })
+      .update({ vigente: !alumno.vigente, editado_por: userId, editado_en: new Date().toISOString() })
       .eq('id', alumno.id);
 
-    if (error) {
-      Alert.alert('Error', 'No se pudo actualizar la vigencia.');
-    } else {
-      setAlumnos((prev) =>
-        prev.map((a) => a.id === alumno.id ? { ...a, vigente: !a.vigente } : a)
-      );
-    }
+    if (error) { Alert.alert('Error', 'No se pudo actualizar la vigencia.'); return; }
+    setAlumnos((prev) =>
+      prev.map((a) => a.id === alumno.id ? { ...a, vigente: !a.vigente } : a)
+    );
   };
 
   // ── Render fila ────────────────────────────────────────────────
   const renderAlumno = (item) => (
     <View key={item.id} style={[s.fila, !item.vigente && s.filaInactiva]}>
-      {/* Info: ocupa el espacio disponible pero no bloquea los botones */}
       <View style={s.filaInfo} pointerEvents="none">
-        <Text style={[s.filaNombre, !item.vigente && s.filaNombreInactivo]}>
-          {item.nombre}
+        <Text style={[s.filaNombre, !item.vigente && s.filaNombreInactivo]} numberOfLines={1}>
+          {nombreMostrar(item)}
         </Text>
         <View style={s.filaCursoRow}>
           <View style={common.badge}>
@@ -160,7 +180,6 @@ export default function AlumnosScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Acciones: zona de toques explícita */}
       <View style={s.filaAcciones}>
         <TouchableOpacity
           style={s.btnEditar}
@@ -194,7 +213,7 @@ export default function AlumnosScreen({ navigation }) {
       </Appbar.Header>
 
       <Searchbar
-        placeholder="Buscar alumno..."
+        placeholder="Buscar por nombre o apellido..."
         value={busqueda}
         onChangeText={setBusqueda}
         style={common.searchbar}
@@ -211,7 +230,6 @@ export default function AlumnosScreen({ navigation }) {
           contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Alumnos activos ── */}
           <View style={common.sectionHeader}>
             <Text style={common.sectionTitle}>ALUMNOS ACTIVOS ({vigentes.length})</Text>
           </View>
@@ -219,7 +237,6 @@ export default function AlumnosScreen({ navigation }) {
             ? <Text style={common.emptyText}>Sin resultados.</Text>
             : vigentes.map(renderAlumno)}
 
-          {/* ── Alumnos inactivos (colapsable) ── */}
           <TouchableOpacity
             style={s.seccionHeaderToggle}
             onPress={() => setMostrarInactivos(!mostrarInactivos)}
@@ -237,7 +254,7 @@ export default function AlumnosScreen({ navigation }) {
         </ScrollView>
       )}
 
-      {/* Modal edición */}
+      {/* ── Modal edición ── */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={cerrarModal}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -246,17 +263,41 @@ export default function AlumnosScreen({ navigation }) {
           <View style={s.modalCard}>
             <Text style={s.modalTitulo}>Editar alumno</Text>
 
-            <Text style={common.sectionTitle}>NOMBRE COMPLETO</Text>
+            {/* Apellido paterno */}
+            <Text style={common.sectionTitle}>APELLIDO PATERNO *</Text>
             <TextInput
               style={s.modalInput}
-              value={formNombre}
-              onChangeText={setFormNombre}
-              placeholder="Nombre del alumno"
+              value={formApellidoPat}
+              onChangeText={setFormApellidoPat}
+              placeholder="ej: Pérez"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
             />
 
-            <Text style={[common.sectionTitle, { marginBottom: 10 }]}>CURSO</Text>
+            {/* Apellido materno */}
+            <Text style={common.sectionTitle}>APELLIDO MATERNO</Text>
+            <TextInput
+              style={s.modalInput}
+              value={formApellidoMat}
+              onChangeText={setFormApellidoMat}
+              placeholder="ej: García (opcional)"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="words"
+            />
+
+            {/* Nombres */}
+            <Text style={common.sectionTitle}>NOMBRES *</Text>
+            <TextInput
+              style={s.modalInput}
+              value={formNombres}
+              onChangeText={setFormNombres}
+              placeholder="ej: Juan Carlos"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="words"
+            />
+
+            {/* Curso */}
+            <Text style={[common.sectionTitle, { marginBottom: 10 }]}>CURSO *</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
               <View style={s.cursosRow}>
                 {CURSOS.map((c) => (
@@ -270,6 +311,16 @@ export default function AlumnosScreen({ navigation }) {
                 ))}
               </View>
             </ScrollView>
+
+            {/* Vista previa nombre completo */}
+            {(formApellidoPat || formNombres) && (
+              <View style={s.previewNombre}>
+                <Text style={s.previewLabel}>Vista previa</Text>
+                <Text style={s.previewTexto}>
+                  {formApellidoPat.toUpperCase()}{formApellidoMat ? ' ' + formApellidoMat.toUpperCase() : ''}, {formNombres}
+                </Text>
+              </View>
+            )}
 
             <View style={s.modalAcciones}>
               <TouchableOpacity style={s.btnCancelar} onPress={cerrarModal}>

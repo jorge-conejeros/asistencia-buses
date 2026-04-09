@@ -73,10 +73,11 @@ export default function AsistenciaScreen({ navigation }) {
   const cargarAlumnos = async () => {
     const { data, error } = await supabase
       .from('alumnos')
-      .select('id, nombre, curso, vigente')
+      .select('id, nombres, apellido_paterno, apellido_materno, nombre_completo, curso, vigente')
       .eq('vigente', true)
       .order('curso')
-      .order('nombre');
+      .order('apellido_paterno')
+      .order('nombres');
     if (error) { Alert.alert('Error', 'No se pudieron cargar los alumnos.'); return; }
     setAlumnos(data);
     inicializarEstados(data);
@@ -164,8 +165,13 @@ export default function AsistenciaScreen({ navigation }) {
 
   // ── Filtro ───────────────────────────────────────────────────
   const alumnosFiltrados = useCallback(() => {
+    const q = busqueda.toLowerCase();
+    if (!q) return alumnos;
     return alumnos.filter((a) =>
-      a.nombre.toLowerCase().includes(busqueda.toLowerCase())
+      a.apellido_paterno?.toLowerCase().includes(q) ||
+      a.apellido_materno?.toLowerCase().includes(q) ||
+      a.nombres?.toLowerCase().includes(q) ||
+      a.nombre?.toLowerCase().includes(q)            // fallback legacy
     );
   }, [alumnos, busqueda]);
 

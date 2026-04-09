@@ -22,6 +22,13 @@ export default function AlumnoItem({ alumno, estado, onChange }) {
   const esAusente  = estado.presente === false;
   const tieneObs   = !!estado.observacion;
 
+  // Formato: "APELLIDO_PAT [APELLIDO_MAT], Nombres"
+  // Si no hay columnas separadas, cae de vuelta a nombre legacy
+  const nombreDisplay = alumno.nombre_completo
+    ?? (alumno.apellido_paterno
+      ? `${alumno.apellido_paterno.toUpperCase()}${alumno.apellido_materno ? ' ' + alumno.apellido_materno.toUpperCase() : ''}, ${alumno.nombres}`
+      : (alumno.nombre ?? ''));
+
   return (
     <View style={[s.fila, esPresente && s.filaPresente, esAusente && s.filaAusente]}>
       {/* Indicador lateral de color */}
@@ -29,7 +36,7 @@ export default function AlumnoItem({ alumno, estado, onChange }) {
 
       {/* Nombre y curso */}
       <View style={s.info}>
-        <Text style={s.nombre} numberOfLines={1}>{alumno.nombre}</Text>
+        <Text style={s.nombre} numberOfLines={1}>{nombreDisplay}</Text>
         <Text style={s.curso}>{alumno.curso}</Text>
       </View>
 
